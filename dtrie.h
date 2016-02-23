@@ -1,32 +1,50 @@
 #include <stddef.h>
 
-typedef struct dtrie_node dtrie_node_t;
+typedef struct dtrie_node dtnode_t;
 
 struct dtrie_node {
-	dtrie_node_t   *child[2];
+	dtnode_t   *child[2];
 	uintptr_t       val;
 };
 
 typedef struct {
-	dtrie_node_t *root;
+	dtnode_t *root;
 } dtrie_t;
 
 /*
  * dtrie_insert inserts a node into the trie
  * using node->val.
  */
-void dtrie_insert(dtrie_t *trie, dtrie_node_t *node);
+int dtrie_insert(dtrie_t *trie, dtnode_t *node);
 
 /* 
  * dtrie_remove_smallest removes the smallest
  * element of the trie.
  */
-dtrie_node_t *dtrie_remove_smallest(dtrie_t *trie);
+dtnode_t *dtrie_remove_smallest(dtrie_t *trie);
 
-typedef void (*treefunc)(void *ctx, dtrie_node_t *node);
+#define MAX_LEVELS (sizeof(uintptr_t)*8)
 
 /*
- * dtrie_traverse calls treefunc(uctx, node) recursively
- * on all of the trie nodes in order.
+ * iter_t is an iterator for a sorted trie.
  */
-void dtrie_traverse(dtrie_t *trie, treefunc func, void *uctx);
+typedef struct {
+	dtnode_t *nodes[MAX_LEVELS];
+	dtnode_t *prev;
+	int       level;
+} dter_t;
+
+/*
+ * dtrie_iter() initializes the trie iterator.
+ */
+void dtrie_iter(dtrie_t *trie, dter_t *iter);
+
+/*
+ * dtrie_next() returns the next node in the
+ * iterator, or NULL if the iterator is exhausted.
+ * The nodes are returned in sorted order.
+ *
+ * NOTE: modifying the trie from which the iterator
+ * was created will invalidate the iterator.
+ */
+dtnode_t *dtrie_next(dter_t *iter);

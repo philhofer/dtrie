@@ -7,8 +7,8 @@ static int breaks_invariant(uintptr_t val, uintptr_t mask, int dir) {
 	return ((dir > 0 && (val&mask)==0) || (dir < 0 && (val&mask)));
 }
 
-static void swap_child(dtrie_node_t *parent, dtrie_node_t *oldchld, dtrie_node_t *newchld) {
-	dtrie_node_t **backptr = (parent->child[0] == oldchld) ? &parent->child[0] : &parent->child[1];
+static void swap_child(dtnode_t *parent, dtnode_t *oldchld, dtnode_t *newchld) {
+	dtnode_t **backptr = (parent->child[0] == oldchld) ? &parent->child[0] : &parent->child[1];
 	*backptr = newchld;
 	newchld->child[0] = oldchld->child[0];
 	newchld->child[1] = oldchld->child[1];
@@ -16,8 +16,8 @@ static void swap_child(dtrie_node_t *parent, dtrie_node_t *oldchld, dtrie_node_t
 	oldchld->child[1] = NULL;
 }
 
-static void swap_root(dtrie_t *trie, dtrie_node_t *node) {
-	dtrie_node_t *root = trie->root;
+static void swap_root(dtrie_t *trie, dtnode_t *node) {
+	dtnode_t *root = trie->root;
 	trie->root = node;
 	node->child[0] = root->child[0];
 	node->child[1] = root->child[1];
@@ -25,13 +25,13 @@ static void swap_root(dtrie_t *trie, dtrie_node_t *node) {
 	root->child[1] = NULL;
 }
 
-void dtrie_insert(dtrie_t *trie, dtrie_node_t *node) {
-	dtrie_node_t *cur = trie->root;
+int dtrie_insert(dtrie_t *trie, dtnode_t *node) {
+	dtnode_t *cur = trie->root;
 	if (!cur) {
 		trie->root = node;
-		return;
+		return 0;
 	}
-	dtrie_node_t *parent = NULL;
+	dtnode_t *parent = NULL;
 
 	/*
 	 * Walk down the trie and exchange the node to be inserted
@@ -39,15 +39,16 @@ void dtrie_insert(dtrie_t *trie, dtrie_node_t *node) {
 	 * the trie invariants (binary tree + bitwise trie).
 	 * Start comparing bits at the msb of the largest int.
 	 */
-	uintptr_t mask = (uintptr_t)1<<((sizeof(uintptr_t)*8)-1);
+	uintptr_t mask = (uintptr_t)1<<(MAX_LEVELS-1);
 	while (cur) {
 		uintptr_t c = node->val - cur->val;
-		if (!c) { return; } /* TODO: handle duplicate */
+		if (!c)
+			return -1;
 
 		/* preserve bitwise level invariant; swap if necessary */
 		if (breaks_invariant(node->val, mask, c)) {
 			parent ? swap_child(parent, cur, node) : swap_root(trie, node);
-			dtrie_node_t *tmp = cur;
+			dtnode_t *tmp = cur;
 			cur = node;
 			node = tmp;
 		}
@@ -57,17 +58,18 @@ void dtrie_insert(dtrie_t *trie, dtrie_node_t *node) {
 		mask >>= 1;
 	}
 	parent->child[!!(node->val&mask<<1)] = node;
+	return 0;
 }
 
-#define SUCCESSOR 1
-#define PREDECESSOR 0
+#define SUCCESSOR 0
+#define PREDECESSOR 1
 /*
  * adjacent(node, SUCCESSOR) or adjacent(node, PREDECESSOR)
  * finds the successor/predecessor to a node, plus the pred/succ
  * parent.
  */
-static inline dtrie_node_t *adjacent(dtrie_node_t *node, int dir, dtrie_node_t **pparent) {
-	dtrie_node_t *parent = node;
+static inline dtnode_t *adjacent(dtnode_t *node, int dir, dtnode_t **pparent) {
+	dtnode_t *parent = node;
 	node = node->child[!dir];
 	if (!node)
 		return NULL;
@@ -81,14 +83,14 @@ static inline dtrie_node_t *adjacent(dtrie_node_t *node, int dir, dtrie_node_t *
 }
 
 /* select the node to replace the one being deleted */
-static inline dtrie_node_t *find_replacement(dtrie_node_t *node, dtrie_node_t **parent) {
-	dtrie_node_t *rep = adjacent(node, SUCCESSOR, parent);
+static inline dtnode_t *find_replacement(dtnode_t *node, dtnode_t **parent) {
+	dtnode_t *rep = adjacent(node, SUCCESSOR, parent);
 	return rep ? rep : adjacent(node, PREDECESSOR, parent);
 }
 
-static inline void delete_node(dtrie_node_t *node, dtrie_node_t *parent) {
-	dtrie_node_t *rparent;
-	dtrie_node_t *rep = find_replacement(node, &rparent);
+static inline void delete_node(dtnode_t *node, dtnode_t *parent) {
+	dtnode_t *rparent;
+	dtnode_t *rep = find_replacement(node, &rparent);
 	if (!rep)
 		return;
 
@@ -96,12 +98,12 @@ static inline void delete_node(dtrie_node_t *node, dtrie_node_t *parent) {
 	delete_node(rep, rparent);
 }
 
-dtrie_node_t *dtrie_remove_smallest(dtrie_t *trie) {
-	dtrie_node_t *cur = trie->root;
+dtnode_t *dtrie_remove_smallest(dtrie_t *trie) {
+	dtnode_t *cur = trie->root;
 	if (!cur)
 		return NULL;
 
-	dtrie_node_t *parent = NULL;
+	dtnode_t *parent = NULL;
 	while (cur->child[0]) {
 		parent = cur;
 		cur = cur->child[0];
@@ -109,23 +111,26 @@ dtrie_node_t *dtrie_remove_smallest(dtrie_t *trie) {
 	if (!parent) {
 		trie->root = NULL;
 	} else {
-		delete_node(parent, cur);
+		delete_node(cur, parent);
 	}
 	return cur;
 }
 
-static void ordered_apply(dtrie_node_t *node, treefunc func, void *uctx) {
-	if (node->child[0])
-		ordered_apply(node->child[0], func, uctx);
-
-	func(uctx, node);
-	if (node->child[1])
-		ordered_apply(node->child[1], func, uctx);
-
+void dtrie_iter(dtrie_t *trie, dter_t *iter) {
+	iter->level = 0;
+	iter->prev = trie->root;
 }
 
-void dtrie_traverse(dtrie_t *trie, treefunc func, void *uctx) {
-	if (trie->root)
-		ordered_apply(trie->root, func, uctx);
-	
+dtnode_t *dtrie_next(dter_t *iter) {
+	if (iter->prev || iter->level) {
+		dtnode_t *cur = iter->prev;
+		while (cur) {
+			iter->nodes[iter->level++] = cur;
+			cur = cur->child[0];
+		}
+		cur = iter->nodes[--iter->level];
+		iter->prev = cur->child[1];
+		return cur;
+	}
+	return NULL;
 }
