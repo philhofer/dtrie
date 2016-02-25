@@ -2,10 +2,10 @@
 CC = gcc
 CFLAGS = -Wall -Werror -g -O3
 
-dtrie.c: dtrie.h
+%.c: %.h
 
-test: dtrie.c dst_test.c
-	$(CC) $(CFLAGS) dtrie.c dst_test.c -o test
+%_test: %.c %_test.c
+	$(CC) $(CFLAGS) $^ -o $@
 
-bench: dtrie.c dst_bench.c
-	$(CC) $(CFLAGS) dtrie.c dst_bench.c -o bench
+%_bench: %.c %_bench.c
+	$(CC) $(CFLAGS) $^ -o $@
