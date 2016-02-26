@@ -1,38 +1,60 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <unistd.h>
 #include "utrie.h"
 
 utrie trie;
 
-static void print_node(unode *node, int depth) {
-	int dots = depth;
-	while (dots--)
-		printf("-");
-	
-	if (node) {
-		printf("[%lu]\n", node->key);
-		for (int i=0; i<SPLAY; ++i) {
-			print_node(node->child[i], depth+1);
+static void dirprint(unode *node) {
+	for (int i=0; i<SPLAY; ++i) {
+		unode *s = node->child[i];
+		if (s) {
+			printf("\t\"%#lx\" ->\"%#lx\"\n", node->key, s->key);
+			dirprint(s);
 		}
-	} else {
-		puts("[]");
 	}
 }
 
-static void show(utrie *trie) {
+static void digraph(utrie *trie, const char *name) {
+	printf("digraph %s {\n", name);
 	for (int i=0; i<(NBITS); ++i) {
-		print_node(trie->buckets[i], 0);
+		unode *r = trie->buckets[i];
+		if (r) {
+			printf("\troot -> bucket_%d;\n", i);
+			printf("\tbucket_%d -> \"%#lx\";\n", i, r->key);
+			dirprint(r);
+		}
 	}
+	puts("}");
 }
+
+#define COUNT 32
 
 int main(void) {
-	unode nodes[16];
-	for (int i=0; i<16; i++) {
+	unode nodes[COUNT];
+	for (int i=0; i<COUNT; i++) {
 		nodes[i] = (unode){{0}};
-		nodes[i].key = (uintptr_t)i+1;
+		nodes[i].key = (uintptr_t)rand();
 		assert(utrie_insert(&trie, &nodes[i]) == &nodes[i]);
-		assert(utrie_find(&trie, (uintptr_t)i+1));
+		assert(utrie_find(&trie, nodes[i].key) == &nodes[i]);
+		validate(&trie);
 	}
-	show(&trie);
+	digraph(&trie, "before");
+
+	for (int i=0; i<COUNT; i++) {
+		unode *node = NULL;
+		node = utrie_find(&trie, nodes[i].key);
+		if (!node) {
+			printf("find(%#lx) = NULL!\n", nodes[i].key);
+			digraph(&trie, "after");
+			_exit(1);
+		}
+		printf("removing %#lx...\n", node->key);
+		utrie_remove(&trie, node);
+		if (!validate(&trie)) {
+			digraph(&trie, "broken");
+			_exit(1);
+		}
+	}
 }

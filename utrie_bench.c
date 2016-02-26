@@ -5,7 +5,7 @@
 #include "utrie.h"
 
 #ifndef MAX
-#define MAX (256*1024)
+#define MAX (64*1024)
 #endif
 
 unode nodes[MAX];
@@ -25,19 +25,26 @@ int main(void) {
 	clock_t elapsed = clock() - start;
 	printf("%d insertions in %lu clocks\n", MAX, elapsed);
 
-	int maxlvl = 0;
-	int total = 0;
-	for (int i=0; i<MAX; i++) {
-		int cur = 0;
-		unode *node = utrie_find(&trie, nodes[i].key);
-		while (node->parent) {
-			cur++;
-			node = node->parent;
-		}
-		total += cur;
-		if (cur > maxlvl)
-			maxlvl = cur;
+	/* int maxlvl = 0; */
+	/* int total = 0; */
+	/* for (int i=0; i<MAX; i++) { */
+	/* 	int cur = 0; */
+	/* 	unode *node = utrie_find(&trie, nodes[i].key); */
+	/* 	while (node->parent) { */
+	/* 		cur++; */
+	/* 		node = node->parent; */
+	/* 	} */
+	/* 	total += cur; */
+	/* 	if (cur > maxlvl) */
+	/* 		maxlvl = cur; */
 
-	}
-	printf("max depth is %d; avg is %d for log2(elems)=%lu\n", maxlvl, total/MAX, (sizeof(uintptr_t)*8)-__builtin_clzl(MAX));
+	/* } */
+	/* printf("max depth is %d; avg is %d for log2(elems)=%lu\n", maxlvl, total/MAX, (sizeof(uintptr_t)*8)-__builtin_clzl(MAX)); */
+
+	/* start = clock(); */
+	/* for (int i=0; i<MAX; i++) { */
+	/* 	utrie_remove(&trie, &nodes[i]); */
+	/* } */
+	/* elapsed = clock() - start; */
+	/* printf("%d removals in %lu clocks\n", MAX, elapsed); */
 }

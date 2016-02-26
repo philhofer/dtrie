@@ -20,3 +20,5 @@ typedef struct {
 
 unode *utrie_insert(utrie *trie, unode *node);
 unode *utrie_find(utrie *trie, uintptr_t key);
+void utrie_remove(utrie *trie, unode *node);
+int validate(utrie *trie);
